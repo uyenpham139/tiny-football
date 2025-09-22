@@ -1,5 +1,6 @@
 import pygame, os
 from button import Button
+from option_menu import OptionMenu
 
 class Menu():
   def __init__(self, game):
@@ -26,8 +27,6 @@ class Menu():
     except (pygame.error, FileNotFoundError):
       self.button_font = pygame.font.Font(None, 35)
 
-    self.state = "Start"
-  
   def draw_text_with_stroke(self, surface, button, text, font, color, stroke_color, stroke_width=2):
     # Render main text surface
     text_surf = font.render(text, True, color)
@@ -64,8 +63,17 @@ class Menu():
 
     # Check button clicks
     if start_button.draw():
-      self.menu_displaying = False
-      self.game.playing = True
+      # Open option menu instead of starting game immediately
+      option_menu = OptionMenu(self.game)
+      option_menu.display_option_menu()
+
+      # Save the selected mode on the game for later use
+      self.game.selected_mode = getattr(option_menu, 'selected_mode', None)
+
+      # After returning from option menu, only start playing if a mode was chosen
+      if self.game.selected_mode:
+        self.menu_displaying = False
+        self.game.playing = True
       return
 
     if quit_button.draw():
