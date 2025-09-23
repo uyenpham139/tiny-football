@@ -1,18 +1,22 @@
 import pygame, os
 from button import Button
-from option_menu import OptionMenu
 
-class Menu():
+class Menu:
   def __init__(self, game):
     self.game = game
-    self.menu_displaying = False
+
+    # flags for main loop
+    self.start_selected = False
+    self.quit_selected = False
 
     # Load background image
     try:
       self.bg = pygame.image.load(os.path.join("assets", "menu-bg.png")).convert()
+      self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
     except (pygame.error, FileNotFoundError):
       self.bg = pygame.Surface((self.game.width, self.game.height))
       self.bg.fill((40, 40, 80))
+      self.scaled_bg = self.bg
 
     # Load button image
     try:
@@ -28,82 +32,55 @@ class Menu():
       self.button_font = pygame.font.Font(None, 35)
 
   def draw_text_with_stroke(self, surface, button, text, font, color, stroke_color, stroke_width=2):
-    # Render main text surface
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect(center=button.rect.center)
-    
-    # Render stroke by drawing text multiple times offset
+
+    # stroke
     for dx in range(-stroke_width, stroke_width + 1):
-        for dy in range(-stroke_width, stroke_width + 1):
-            if dx == 0 and dy == 0:
-                continue
-            stroke_surf = font.render(text, True, stroke_color)
-            stroke_rect = stroke_surf.get_rect(center=(button.rect.centerx + dx, button.rect.centery + dy))
-            surface.blit(stroke_surf, stroke_rect)
-    
-    # Draw main text on top
+      for dy in range(-stroke_width, stroke_width + 1):
+        if dx == 0 and dy == 0:
+          continue
+        stroke_surf = font.render(text, True, stroke_color)
+        stroke_rect = stroke_surf.get_rect(center=(button.rect.centerx + dx, button.rect.centery + dy))
+        surface.blit(stroke_surf, stroke_rect)
+
     surface.blit(text_surf, text_rect)
 
-  def draw(self):
-    # Draw menu background
-    menu_img = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
-    self.game.screen.blit(menu_img, (0, 0))
+  def events(self):
+    for event in pygame.event.get():
+      if event.type == pygame.QUIT:
+        self.game.running = False
+      elif event.type == pygame.VIDEORESIZE:
+        self.game.width, self.game.height = event.w, event.h
+        self.game.screen = pygame.display.set_mode((self.game.width, self.game.height), pygame.RESIZABLE)
+        self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
+      elif event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_ESCAPE:
+          self.game.running = False
 
-    # Calculate button size
+  def draw(self):
+    # background
+    self.game.screen.blit(self.scaled_bg, (0, 0))
+
+    # button size
     button_width = self.game.width // 6
     button_height = int(self.button_img.get_height() * (button_width / self.button_img.get_width()))
     scaled_button_img = pygame.transform.smoothscale(self.button_img, (button_width, button_height))
-    
-    # Calculate button positions
+
+    # positions
     dist_x = self.game.width // 2 - button_width - 10
     dist_y = self.game.height - button_height - 100
 
     start_button = Button(dist_x, dist_y, scaled_button_img, self.game)
     quit_button = Button(dist_x + button_width + 20, dist_y, scaled_button_img, self.game)
 
-    # Check button clicks
     if start_button.draw():
-      # Open option menu instead of starting game immediately
-      option_menu = OptionMenu(self.game)
-      option_menu.display_option_menu()
-
-      # Save the selected mode on the game for later use
-      self.game.selected_mode = getattr(option_menu, 'selected_mode', None)
-
-      # After returning from option menu, only start playing if a mode was chosen
-      if self.game.selected_mode:
-        self.menu_displaying = False
-        self.game.playing = True
-      return
+      self.start_selected = True
 
     if quit_button.draw():
-      self.game.running = False
-      self.menu_displaying = False
-      return
-    
+      self.quit_selected = True
+
     self.draw_text_with_stroke(self.game.screen, start_button, "PLAY", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
-    self.draw_text_with_stroke(self.game.screen, quit_button, "QUIT", self.button_font, (255, 255, 255), (0,0,0), stroke_width=5)
+    self.draw_text_with_stroke(self.game.screen, quit_button, "QUIT", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
 
     pygame.display.flip()
-
-  def events(self):
-    for event in pygame.event.get():
-      if event.type == pygame.QUIT:
-        self.game.running = False
-        self.menu_displaying = False
-
-      elif event.type == pygame.VIDEORESIZE:
-        self.game.width, self.game.height = event.w, event.h
-        self.game.screen = pygame.display.set_mode((self.game.width, self.game.height), pygame.RESIZABLE)
-
-      elif event.type == pygame.KEYDOWN:
-        if event.key == pygame.K_ESCAPE:
-          self.game.running = False
-          self.menu_displaying = False
-
-  def display_menu(self):
-    self.menu_displaying = True
-    while self.menu_displaying:
-      self.events()
-      self.draw()
-      self.game.clock.tick(60)
