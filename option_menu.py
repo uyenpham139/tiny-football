@@ -5,15 +5,8 @@ import os
 class OptionMenu:
   def __init__(self, game):
     self.game = game
-    self.option_displaying = False
-    
-    self.teams = ['Blue', 'Red']
-    
-    # Player states
-    self.p1 = {"team": 0, "character": 0, "confirmed": False}
-    self.p2 = {"team": 0, "character": 0, "confirmed": False}
-    
-    # Selection state
+
+    # selection result
     self.selected_mode = None  # 'pvp' or 'pvai'
     self.selected_squad = None  # 'home' or 'visitor'
     self.phase = 'mode'  # 'mode' -> 'squad' (when pvp selected)
@@ -34,7 +27,7 @@ class OptionMenu:
       self.bg = pygame.Surface((self.game.width, self.game.height))
       self.bg.fill((40, 40, 80))
     
-    # Load button image (same behavior as menu)
+    # Load button image
     try:
       self.button_img = pygame.image.load(os.path.join("assets", "menu-button.png")).convert_alpha()
     except (pygame.error, FileNotFoundError):
@@ -63,9 +56,7 @@ class OptionMenu:
     except (pygame.error, FileNotFoundError):
       self.badge_font = pygame.font.Font(None, 22)
       
-  
   def draw_multiline_with_stroke(self, surface, button, lines, font, color, stroke_color, line_spacing=6, stroke_width=2):
-    # Pre-render main line surfaces to get heights
     line_surfaces = [font.render(line, True, color) for line in lines]
     line_heights = [surf.get_height() for surf in line_surfaces]
     total_height = sum(line_heights) + line_spacing * (len(lines) - 1)
@@ -76,7 +67,7 @@ class OptionMenu:
       line_h = line_heights[index]
       center_y = current_y + line_h // 2
 
-      # Stroke pass
+      # stroke
       for dx in range(-stroke_width, stroke_width + 1):
         for dy in range(-stroke_width, stroke_width + 1):
           if dx == 0 and dy == 0:
@@ -85,10 +76,8 @@ class OptionMenu:
           stroke_rect = stroke_surf.get_rect(center=(button.rect.centerx + dx, center_y + dy))
           surface.blit(stroke_surf, stroke_rect)
 
-      # Main text pass
       text_rect = line_surf.get_rect(center=(button.rect.centerx, center_y))
       surface.blit(line_surf, text_rect)
-
       current_y += line_h + line_spacing
 
   def draw_text_with_stroke_center(self, text, center, font, color, stroke_color, stroke_width=2):
@@ -153,9 +142,7 @@ class OptionMenu:
     max_text_w = max(max_text_w_pvp, max_text_w_pvai)
     max_text_h = max(text_pvp_h, text_vs_h, text_pvai_h)
 
-    pad_x = 40
-    pad_y = 20
-
+    pad_x, pad_y = 40, 20
     base_width = self.game.width // 6 if self.button_img.get_width() > 0 else 200
     extra_width = 100
     target_width = max(base_width, max_text_w + pad_x * 2) + extra_width
@@ -170,7 +157,7 @@ class OptionMenu:
 
     scaled_button_img = pygame.transform.smoothscale(self.button_img, (target_width, target_height))
 
-    # Positions: stack vertically, centered
+    # positions
     x = self.game.width // 2 - target_width // 2
     spacing = 20
     y1 = self.game.height // 2 - target_height - spacing // 2
@@ -296,7 +283,6 @@ class OptionMenu:
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
         self.game.running = False
-        self.option_displaying = False
 
       elif event.type == pygame.VIDEORESIZE:
         self.game.width, self.game.height = event.w, event.h
@@ -309,7 +295,7 @@ class OptionMenu:
             # go back to mode selection
             self.phase = 'mode'
           else:
-            self.option_displaying = False
+            self.game.running = False
         elif self.phase == 'squad':
           # P1 controls (A/D to select, W ready, S unready). Lock switching while ready
           if not self.p1_ready and event.key == pygame.K_a:
@@ -343,12 +329,3 @@ class OptionMenu:
               self.p2_ready = True
             elif event.key == pygame.K_DOWN:
               self.p2_ready = False
-  
-  
-  def display_option_menu(self):
-    self.option_displaying = True
-    while self.option_displaying and self.game.running:
-      self.events()
-      self.draw()
-      self.game.clock.tick(60)
-    

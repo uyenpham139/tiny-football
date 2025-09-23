@@ -1,16 +1,41 @@
 import pygame
 from game import Game
+from menu import Menu
+from option_menu import OptionMenu
 
 def main():
-    game = Game()
+  game = Game()
+  menu = Menu(game)
+  option_menu = OptionMenu(game)
 
-    while game.running:
-        if not game.playing:
-            game.curr_menu.display_menu()
-        else:
-            game.game_loop()
-    
-    pygame.quit()
+  state = "menu"  # can be "menu", "option", "game"
+
+  while game.running:
+    if state == "menu":
+      menu.events()
+      menu.draw()
+      if menu.start_selected:
+        state = "option"
+        menu.start_selected = False
+      elif menu.quit_selected:
+        game.running = False
+
+    elif state == "option":
+      option_menu.events()
+      option_menu.draw()
+      if option_menu.selected_mode:
+        game.playing = True
+        state = "game"
+
+    elif state == "game":
+      game.events()
+      game.draw()
+      if not game.playing:
+        state = "menu"
+
+    game.clock.tick(60)
+
+  pygame.quit()
 
 if __name__ == "__main__":
-    main()
+  main()
