@@ -23,9 +23,14 @@ def main():
     elif state == "option":
       option_menu.events()
       option_menu.draw()
-      if option_menu.selected_mode:
-        game.playing = True
-        state = "game"
+      if option_menu.option_completed:
+        if option_menu.selected_mode:
+          game.playing = True
+          state = "game"
+        else:
+          # Return to menu without starting game
+          state = "menu"
+        option_menu.reset()
 
     elif state == "game":
       game.events()

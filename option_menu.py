@@ -10,15 +10,11 @@ class OptionMenu:
     self.selected_mode = None  # 'pvp' or 'pvai'
     self.selected_squad = None  # 'home' or 'visitor'
     self.phase = 'mode'  # 'mode' -> 'squad' (when pvp selected)
+    self.option_completed = False  # flag to return to main menu
 
-    # Persistent keyboard selection side for squad phase: 'left' or 'right'
-    self.selected_side = None
-    # P1 ready state (W to set, S to unset)
-    self.p1_ready = False
-
-    # P2 controls and ready state (Arrow keys)
-    self.selected_side_p2 = None  # 'left' or 'right'
-    self.p2_ready = False
+    # Persistent selection side for squad phase: 'left' or 'right'
+    self.selected_side = None  # P1 selection
+    self.selected_side_p2 = None  # P2 selection
     
     # Load background image (only field, no border)
     try:
@@ -207,52 +203,45 @@ class OptionMenu:
     pvp_home_btn = Button(start_x, y, home_img, self.game)
     pvp_visitor_btn = Button(start_x + home_img.get_width() + gap, y, visitor_img, self.game)
 
-    act_home = pvp_home_btn.draw()
-    act_visitor = pvp_visitor_btn.draw()
+    # Chỉ cho phép tương tác với nút nếu chưa được chọn
+    act_home = pvp_home_btn.draw() if self.selected_side != 'left' and self.selected_side_p2 != 'left' else False
+    act_visitor = pvp_visitor_btn.draw() if self.selected_side != 'right' and self.selected_side_p2 != 'right' else False
 
     mouse_pos = pygame.mouse.get_pos()
     mouse_pressed = pygame.mouse.get_pressed()[0] == 1
 
-    # Pressed states combine mouse press and persistent keyboard selections from P1 and P2
-    left_pressed = (mouse_pressed and pvp_home_btn.rect.collidepoint(mouse_pos)) or (self.selected_side == 'left') or (self.selected_side_p2 == 'left')
-    right_pressed = (mouse_pressed and pvp_visitor_btn.rect.collidepoint(mouse_pos)) or (self.selected_side == 'right') or (self.selected_side_p2 == 'right')
+    # Hiển thị trạng thái nút đã chọn
+    left_pressed = self.selected_side == 'left' or self.selected_side_p2 == 'left'
+    right_pressed = self.selected_side == 'right' or self.selected_side_p2 == 'right'
 
-    self.draw_button_feedback(pvp_home_btn, pvp_home_btn.rect.collidepoint(mouse_pos), left_pressed)
-    self.draw_button_feedback(pvp_visitor_btn, pvp_visitor_btn.rect.collidepoint(mouse_pos), right_pressed)
+    self.draw_button_feedback(pvp_home_btn, pvp_home_btn.rect.collidepoint(mouse_pos) and not left_pressed, left_pressed)
+    self.draw_button_feedback(pvp_visitor_btn, pvp_visitor_btn.rect.collidepoint(mouse_pos) and not right_pressed, right_pressed)
 
-    # P1 badge and optional checkmark
+    # P1 badge
     if self.selected_side == 'left':
       badge_pos = (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 16)
       self.draw_text_with_stroke_center("P1", badge_pos, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-      if self.p1_ready:
-        self.draw_checkmark((badge_pos[0] + 24, badge_pos[1]), radius=10)
     elif self.selected_side == 'right':
       badge_pos = (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 16)
       self.draw_text_with_stroke_center("P1", badge_pos, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-      if self.p1_ready:
-        self.draw_checkmark((badge_pos[0] + 24, badge_pos[1]), radius=10)
 
-    # P2 badge and optional checkmark (offset higher to avoid overlap) - only show in PvP mode
+    # P2 badge - only show in PvP mode
     if self.selected_mode == 'pvp':
       if self.selected_side_p2 == 'left':
         badge_pos2 = (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 46)
         self.draw_text_with_stroke_center("P2", badge_pos2, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-        if self.p2_ready:
-          self.draw_checkmark((badge_pos2[0] + 24, badge_pos2[1]), radius=10)
       elif self.selected_side_p2 == 'right':
         badge_pos2 = (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 46)
         self.draw_text_with_stroke_center("P2", badge_pos2, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-        if self.p2_ready:
-          self.draw_checkmark((badge_pos2[0] + 24, badge_pos2[1]), radius=10)
 
-    # Auto-continue when both players are ready and have selected sides (PvP mode)
-    if self.selected_mode == 'pvp' and self.p1_ready and self.p2_ready and (self.selected_side is not None) and (self.selected_side_p2 is not None):
-      self.option_displaying = False
+    # Auto-continue when both players have selected sides (PvP mode)
+    if self.selected_mode == 'pvp' and (self.selected_side is not None) and (self.selected_side_p2 is not None):
+      self.option_completed = True
       return
     
-    # Auto-continue when P1 is ready and has selected side (PvAI mode)
-    if self.selected_mode == 'pvai' and self.p1_ready and (self.selected_side is not None):
-      self.option_displaying = False
+    # Auto-continue when P1 has selected side (PvAI mode)
+    if self.selected_mode == 'pvai' and (self.selected_side is not None):
+      self.option_completed = True
       return
 
     # Labels under each image button
@@ -260,14 +249,19 @@ class OptionMenu:
     self.draw_text_with_stroke_center("Squad Home Team", (pvp_home_btn.rect.centerx, pvp_home_btn.rect.bottom + label_offset + 10), self.button_font, (255,255,255), (0,0,0), stroke_width=4)
     self.draw_text_with_stroke_center("Squad Visitor Team", (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.bottom + label_offset + 10), self.button_font, (255,255,255), (0,0,0), stroke_width=4)
 
+    # Xử lý khi người dùng nhấp vào nút
     if act_home:
-      self.selected_squad = 'home'
-      self.option_displaying = False
+      if self.selected_side is None:
+        self.selected_side = 'left'
+      elif self.selected_mode == 'pvp' and self.selected_side_p2 is None:
+        self.selected_side_p2 = 'left'
       return
 
     if act_visitor:
-      self.selected_squad = 'visitor'
-      self.option_displaying = False
+      if self.selected_side is None:
+        self.selected_side = 'right'
+      elif self.selected_mode == 'pvp' and self.selected_side_p2 is None:
+        self.selected_side_p2 = 'right'
       return
   
   def draw(self):
@@ -294,38 +288,18 @@ class OptionMenu:
           if self.phase == 'squad':
             # go back to mode selection
             self.phase = 'mode'
+            # Reset squad selection state
+            self.selected_side = None
+            self.selected_side_p2 = None
           else:
-            self.game.running = False
-        elif self.phase == 'squad':
-          # P1 controls (A/D to select, W ready, S unready). Lock switching while ready
-          if not self.p1_ready and event.key == pygame.K_a:
-            # Check if P2 has already claimed 'left' side (only in PvP mode)
-            if self.selected_mode == 'pvp' and (self.p2_ready and self.selected_side_p2 == 'left'):
-              pass  # Block selection
-            else:
-              self.selected_side = 'left'
-          elif not self.p1_ready and event.key == pygame.K_d:
-            # Check if P2 has already claimed 'right' side (only in PvP mode)
-            if self.selected_mode == 'pvp' and (self.p2_ready and self.selected_side_p2 == 'right'):
-              pass  # Block selection
-            else:
-              self.selected_side = 'right'
-          elif event.key == pygame.K_w:
-            self.p1_ready = True
-          elif event.key == pygame.K_s:
-            self.p1_ready = False
-          
-          # P2 controls (Arrows) - only active in PvP mode
-          elif self.selected_mode == 'pvp':
-            if not self.p2_ready and event.key == pygame.K_LEFT:
-              # Check if P1 has already claimed 'left' side
-              if not (self.p1_ready and self.selected_side == 'left'):
-                self.selected_side_p2 = 'left'
-            elif not self.p2_ready and event.key == pygame.K_RIGHT:
-              # Check if P1 has already claimed 'right' side
-              if not (self.p1_ready and self.selected_side == 'right'):
-                self.selected_side_p2 = 'right'
-            elif event.key == pygame.K_UP:
-              self.p2_ready = True
-            elif event.key == pygame.K_DOWN:
-              self.p2_ready = False
+            # Return to main menu
+            self.option_completed = True
+
+  def reset(self):
+    """Reset option menu state when returning from game"""
+    self.selected_mode = None
+    self.selected_squad = None
+    self.phase = 'mode'
+    self.option_completed = False
+    self.selected_side = None
+    self.selected_side_p2 = None
