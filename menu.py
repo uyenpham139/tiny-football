@@ -2,8 +2,10 @@ import pygame, os
 from button import Button
 
 class Menu:
-  def __init__(self, game):
-    self.game = game
+  def __init__(self, screen, width, height):
+    self.screen = screen
+    self.width = width
+    self.height = height
 
     # flags for main loop
     self.start_selected = False
@@ -12,9 +14,9 @@ class Menu:
     # Load background image
     try:
       self.bg = pygame.image.load(os.path.join("assets", "menu-bg.png")).convert()
-      self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
+      self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.width, self.height))
     except (pygame.error, FileNotFoundError):
-      self.bg = pygame.Surface((self.game.width, self.game.height))
+      self.bg = pygame.Surface((self.width, self.height))
       self.bg.fill((40, 40, 80))
       self.scaled_bg = self.bg
 
@@ -31,6 +33,13 @@ class Menu:
     except (pygame.error, FileNotFoundError):
       self.button_font = pygame.font.Font(None, 35)
 
+  def resize(self, width, height, screen):
+    """Update menu when window is resized."""
+    self.width = width
+    self.height = height
+    self.screen = screen
+    self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.width, self.height))
+
   def draw_text_with_stroke(self, surface, button, text, font, color, stroke_color, stroke_width=2):
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect(center=button.rect.center)
@@ -46,33 +55,34 @@ class Menu:
 
     surface.blit(text_surf, text_rect)
 
-  def events(self):
-    for event in pygame.event.get():
+  def events(self, events):
+    for event in events:
       if event.type == pygame.QUIT:
-        self.game.running = False
+        # quit handled globally in main
+        pass
       elif event.type == pygame.VIDEORESIZE:
-        self.game.width, self.game.height = event.w, event.h
-        self.game.screen = pygame.display.set_mode((self.game.width, self.game.height), pygame.RESIZABLE)
-        self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
-      elif event.type == pygame.KEYDOWN:
-        if event.key == pygame.K_ESCAPE:
-          self.game.running = False
+        self.width, self.height = event.w, event.h
+        self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+        self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.width, self.height))
+      elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+          self.quit_selected = True
+
 
   def draw(self):
     # background
-    self.game.screen.blit(self.scaled_bg, (0, 0))
+    self.screen.blit(self.scaled_bg, (0, 0))
 
     # button size
-    button_width = self.game.width // 6
+    button_width = self.width // 6
     button_height = int(self.button_img.get_height() * (button_width / self.button_img.get_width()))
     scaled_button_img = pygame.transform.smoothscale(self.button_img, (button_width, button_height))
 
     # positions
-    dist_x = self.game.width // 2 - button_width - 10
-    dist_y = self.game.height - button_height - 100
+    dist_x = self.width // 2 - button_width - 10
+    dist_y = self.height - button_height - 100
 
-    start_button = Button(dist_x, dist_y, scaled_button_img, self.game)
-    quit_button = Button(dist_x + button_width + 20, dist_y, scaled_button_img, self.game)
+    start_button = Button(dist_x, dist_y, scaled_button_img, self.screen)
+    quit_button = Button(dist_x + button_width + 20, dist_y, scaled_button_img, self.screen)
 
     if start_button.draw():
       self.start_selected = True
@@ -80,7 +90,5 @@ class Menu:
     if quit_button.draw():
       self.quit_selected = True
 
-    self.draw_text_with_stroke(self.game.screen, start_button, "PLAY", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
-    self.draw_text_with_stroke(self.game.screen, quit_button, "QUIT", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
-
-    pygame.display.flip()
+    self.draw_text_with_stroke(self.screen, start_button, "PLAY", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
+    self.draw_text_with_stroke(self.screen, quit_button, "QUIT", self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=5)
