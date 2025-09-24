@@ -73,8 +73,10 @@ def main():
         pvp_gameplay.update()
         pvp_gameplay.draw()
         
-      if pvp_gameplay and not pvp_gameplay.playing:
-        state = "menu"
+        if pvp_gameplay and pvp_gameplay.back_to_menu:
+          playing = False
+          state = "menu"
+          pvp_gameplay = None
 
       if not playing:
         state = "menu"
