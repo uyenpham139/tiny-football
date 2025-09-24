@@ -6,31 +6,29 @@ class OptionMenu:
   def __init__(self, game):
     self.game = game
 
-    # selection result
-    self.selected_mode = None  # 'pvp' or 'pvai'
-    self.selected_squad = None  # 'home' or 'visitor'
-    self.phase = 'mode'  # 'mode' -> 'squad' (when pvp selected)
-    self.option_completed = False  # flag to return to main menu
+    # selection state
+    self.game.selected_mode = None  # 'pvp' or 'pvai'
+    self.phase = 'mode'
+    self.option_completed = False
+    self.game.selected_side = None
+    self.game.selected_side_p2 = None
 
-    # Persistent selection side for squad phase: 'left' or 'right'
-    self.selected_side = None  # P1 selection
-    self.selected_side_p2 = None  # P2 selection
-    
-    # Load background image (only field, no border)
+    # Load background image
     try:
       self.bg = pygame.image.load(os.path.join("assets", "Field", "Only Field.png")).convert()
     except (pygame.error, FileNotFoundError):
       self.bg = pygame.Surface((self.game.width, self.game.height))
       self.bg.fill((40, 40, 80))
-    
+    self.bg_scaled = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
+
     # Load button image
     try:
       self.button_img = pygame.image.load(os.path.join("assets", "menu-button.png")).convert_alpha()
     except (pygame.error, FileNotFoundError):
       self.button_img = pygame.Surface((200, 50))
       self.button_img.fill((100, 100, 100))
-    
-    # Load preview images for squad selection
+
+    # Load squad preview images
     try:
       self.home_img_raw = pygame.image.load(os.path.join("assets", "Preview", "10.png")).convert_alpha()
     except (pygame.error, FileNotFoundError):
@@ -41,7 +39,7 @@ class OptionMenu:
     except (pygame.error, FileNotFoundError):
       self.visitor_img_raw = pygame.Surface((200, 200), pygame.SRCALPHA)
       self.visitor_img_raw.fill((160, 160, 160, 255))
-    
+
     # Load fonts
     try:
       self.button_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", 50)
@@ -51,16 +49,37 @@ class OptionMenu:
       self.badge_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", 28)
     except (pygame.error, FileNotFoundError):
       self.badge_font = pygame.font.Font(None, 22)
-      
-  def draw_multiline_with_stroke(self, surface, button, lines, font, color, stroke_color, line_spacing=6, stroke_width=2):
-    line_surfaces = [font.render(line, True, color) for line in lines]
+
+    # Pre-render static text surfaces
+    self.text_cache = {}
+    self.cache_text("PVP", ["PLAYER", "VS", "PLAYER"])
+    self.cache_text("PVAI", ["PLAYER", "VS", "AI"])
+
+    # Pre-scaled squad images
+    self.home_img = None
+    self.visitor_img = None
+    self.scale_squads()
+
+  # -----------------------------
+  # Utilities
+  # -----------------------------
+  def cache_text(self, key, lines, stroke_color=(0,0,0), stroke_width=5):
+    """Pre-render a multi-line text with stroke and cache it."""
+    line_surfaces = []
+    for line in lines:
+      surf = self.button_font.render(line, True, (255,255,255))
+      line_surfaces.append(surf)
+    self.text_cache[key] = (lines, line_surfaces, stroke_color, stroke_width)
+
+  def render_cached_text(self, surface, button, key):
+    lines, line_surfaces, stroke_color, stroke_width = self.text_cache[key]
     line_heights = [surf.get_height() for surf in line_surfaces]
-    total_height = sum(line_heights) + line_spacing * (len(lines) - 1)
+    total_height = sum(line_heights) + 6 * (len(lines) - 1)
     current_y = button.rect.centery - total_height // 2
 
-    for index, line in enumerate(lines):
-      line_surf = line_surfaces[index]
-      line_h = line_heights[index]
+    for i, line in enumerate(lines):
+      surf = line_surfaces[i]
+      line_h = line_heights[i]
       center_y = current_y + line_h // 2
 
       # stroke
@@ -68,13 +87,13 @@ class OptionMenu:
         for dy in range(-stroke_width, stroke_width + 1):
           if dx == 0 and dy == 0:
             continue
-          stroke_surf = font.render(line, True, stroke_color)
+          stroke_surf = self.button_font.render(line, True, stroke_color)
           stroke_rect = stroke_surf.get_rect(center=(button.rect.centerx + dx, center_y + dy))
           surface.blit(stroke_surf, stroke_rect)
 
-      text_rect = line_surf.get_rect(center=(button.rect.centerx, center_y))
-      surface.blit(line_surf, text_rect)
-      current_y += line_h + line_spacing
+      rect = surf.get_rect(center=(button.rect.centerx, center_y))
+      surface.blit(surf, rect)
+      current_y += line_h + 6
 
   def draw_text_with_stroke_center(self, text, center, font, color, stroke_color, stroke_width=2):
     text_surf = font.render(text, True, color)
@@ -88,68 +107,30 @@ class OptionMenu:
         self.game.screen.blit(stroke_surf, stroke_rect)
     self.game.screen.blit(text_surf, text_rect)
 
-  def draw_checkmark(self, center, radius=10):
-    # Green circle background
-    pygame.draw.circle(self.game.screen, (0, 200, 120), center, radius)
-    # White check mark
-    arm1_start = (center[0] - radius // 3, center[1])
-    arm1_end = (center[0] - 1, center[1] + radius // 3)
-    arm2_end = (center[0] + radius // 2, center[1] - radius // 3)
-    pygame.draw.line(self.game.screen, (255,255,255), arm1_start, arm1_end, max(2, radius // 4))
-    pygame.draw.line(self.game.screen, (255,255,255), arm1_end, arm2_end, max(2, radius // 4))
+  def scale_squads(self):
+    """Pre-scale squad preview images based on current window size."""
+    target_width = max(240, self.game.width // 6)
+    def scale(img):
+      w, h = img.get_width(), img.get_height()
+      scale = target_width / max(w, 1)
+      return pygame.transform.smoothscale(img, (int(w * scale), int(h * scale)))
+    self.home_img = scale(self.home_img_raw)
+    self.visitor_img = scale(self.visitor_img_raw)
 
-  def draw_button_feedback(self, button, is_hovered, is_pressed, is_selected=False):
-    # Shape-respecting tint using the button image alpha
-    if is_pressed:
-      overlay = button.image.copy()
-      overlay.fill((200, 200, 200, 255), special_flags=pygame.BLEND_RGBA_MULT)
-      self.game.screen.blit(overlay, (button.rect.x, button.rect.y))
-    elif is_hovered:
-      overlay = button.image.copy()
-      overlay.fill((40, 40, 40, 0), special_flags=pygame.BLEND_RGBA_ADD)
-      self.game.screen.blit(overlay, (button.rect.x, button.rect.y))
-
-    if is_selected:
-      pygame.draw.rect(self.game.screen, (0, 200, 120), button.rect, 3, border_radius=10)
-  
+  # -----------------------------
+  # Drawing
+  # -----------------------------
   def draw_background(self):
-    # Background (clear + cover)
-    self.game.screen.fill((0, 0, 0))
-    bg_w, bg_h = self.bg.get_width(), self.bg.get_height()
-    scr_w, scr_h = self.game.width, self.game.height
-    if bg_w > 0 and bg_h > 0:
-      scale = max(scr_w / bg_w, scr_h / bg_h)
-      scaled_size = (int(bg_w * scale), int(bg_h * scale))
-      menu_img = pygame.transform.smoothscale(self.bg, scaled_size)
-      offset_x = (scr_w - scaled_size[0]) // 2
-      offset_y = (scr_h - scaled_size[1]) // 2
-      self.game.screen.blit(menu_img, (offset_x, offset_y))
-    else:
-      menu_img = pygame.transform.smoothscale(self.bg, (scr_w, scr_h))
-      self.game.screen.blit(menu_img, (0, 0))
+    self.game.screen.blit(self.bg_scaled, (0,0))
 
   def draw_phase_mode(self):
-    # Button sizing: ensure text fits with padding
-    text_pvp_w, text_pvp_h = self.button_font.size("PLAYER")
-    text_vs_w, text_vs_h = self.button_font.size("VS")
-    text_pvai_w, text_pvai_h = self.button_font.size("AI")
-    max_text_w_pvp = max(text_pvp_w, text_vs_w, text_pvp_w)
-    max_text_w_pvai = max(text_pvp_w, text_vs_w, text_pvai_w)
-    max_text_w = max(max_text_w_pvp, max_text_w_pvai)
-    max_text_h = max(text_pvp_h, text_vs_h, text_pvai_h)
-
-    pad_x, pad_y = 40, 20
     base_width = self.game.width // 6 if self.button_img.get_width() > 0 else 200
-    extra_width = 100
-    target_width = max(base_width, max_text_w + pad_x * 2) + extra_width
+    target_width = base_width + 100
 
     src_w = max(self.button_img.get_width(), 1)
     src_h = max(self.button_img.get_height(), 1)
     ratio = src_h / src_w
     target_height = int(target_width * ratio)
-    line_spacing = 6
-    total_text_height = max_text_h * 3 + line_spacing * 2
-    target_height = max(target_height, total_text_height + pad_y * 2)
 
     scaled_button_img = pygame.transform.smoothscale(self.button_img, (target_width, target_height))
 
@@ -162,144 +143,130 @@ class OptionMenu:
     pvp_button = Button(x, y1, scaled_button_img, self.game)
     pvai_button = Button(x, y2, scaled_button_img, self.game)
 
-    pvp_action = pvp_button.draw()
-    pvai_action = pvai_button.draw()
-
-    mouse_pos = pygame.mouse.get_pos()
-    mouse_pressed = pygame.mouse.get_pressed()[0] == 1
-    self.draw_button_feedback(pvp_button, pvp_button.rect.collidepoint(mouse_pos), mouse_pressed and pvp_button.rect.collidepoint(mouse_pos))
-    self.draw_button_feedback(pvai_button, pvai_button.rect.collidepoint(mouse_pos), mouse_pressed and pvai_button.rect.collidepoint(mouse_pos))
-
-    self.draw_multiline_with_stroke(self.game.screen, pvp_button, ["PLAYER", "VS", "PLAYER"], self.button_font, (255, 255, 255), (0, 0, 0), line_spacing=6, stroke_width=5)
-    self.draw_multiline_with_stroke(self.game.screen, pvai_button, ["PLAYER", "VS", "AI"], self.button_font, (255, 255, 255), (0, 0, 0), line_spacing=6, stroke_width=5)
-
-    if pvp_action:
-      self.selected_mode = 'pvp'
+    if pvp_button.draw():
+      self.game.selected_mode = 'pvp'
       self.phase = 'squad'
+      self.scale_squads()
       return
 
-    if pvai_action:
-      self.selected_mode = 'pvai'
+    if pvai_button.draw():
+      self.game.selected_mode = 'pvai'
       self.phase = 'squad'
+      self.scale_squads()
       return
+
+    self.render_cached_text(self.game.screen, pvp_button, "PVP")
+    self.render_cached_text(self.game.screen, pvai_button, "PVAI")
 
   def draw_phase_squad(self):
-    # Scale preview images to consistent width
-    target_width = max(240, self.game.width // 6)
-    def scale_keep_ratio(img):
-      w, h = img.get_width(), img.get_height()
-      scale = target_width / max(w, 1)
-      return pygame.transform.smoothscale(img, (int(w * scale), int(h * scale)))
-
-    home_img = scale_keep_ratio(self.home_img_raw)
-    visitor_img = scale_keep_ratio(self.visitor_img_raw)
-
-    # Horizontal positions for left/right layout
     gap = 500
-    total_width = home_img.get_width() + visitor_img.get_width() + gap
+    total_width = self.home_img.get_width() + self.visitor_img.get_width() + gap
     start_x = max(20, self.game.width // 2 - total_width // 2)
-    y = self.game.height // 2 - max(home_img.get_height(), visitor_img.get_height()) // 2
+    y = self.game.height // 2 - max(self.home_img.get_height(), self.visitor_img.get_height()) // 2
 
-    pvp_home_btn = Button(start_x, y, home_img, self.game)
-    pvp_visitor_btn = Button(start_x + home_img.get_width() + gap, y, visitor_img, self.game)
+    # Always draw both buttons
+    pvp_home_btn = Button(start_x, y, self.home_img, self.game)
+    pvp_visitor_btn = Button(start_x + self.home_img.get_width() + gap, y, self.visitor_img, self.game)
 
-    # Chỉ cho phép tương tác với nút nếu chưa được chọn
-    act_home = pvp_home_btn.draw() if self.selected_side != 'left' and self.selected_side_p2 != 'left' else False
-    act_visitor = pvp_visitor_btn.draw() if self.selected_side != 'right' and self.selected_side_p2 != 'right' else False
+    # Only allow click if not already chosen
+    if not (self.game.selected_side == 'left' or self.game.selected_side_p2 == 'left'):
+      if pvp_home_btn.draw():
+        if self.game.selected_side is None:
+          self.game.selected_side = 'left'
+        elif self.game.selected_mode == 'pvp' and self.game.selected_side_p2 is None:
+          self.game.selected_side_p2 = 'left'
+    else:
+      pvp_home_btn.draw()  # still draw, just no click
 
-    mouse_pos = pygame.mouse.get_pos()
-    mouse_pressed = pygame.mouse.get_pressed()[0] == 1
+    if not (self.game.selected_side == 'right' or self.game.selected_side_p2 == 'right'):
+      if pvp_visitor_btn.draw():
+        if self.game.selected_side is None:
+          self.game.selected_side = 'right'
+        elif self.game.selected_mode == 'pvp' and self.game.selected_side_p2 is None:
+          self.game.selected_side_p2 = 'right'
+    else:
+      pvp_visitor_btn.draw()  
 
-    # Hiển thị trạng thái nút đã chọn
-    left_pressed = self.selected_side == 'left' or self.selected_side_p2 == 'left'
-    right_pressed = self.selected_side == 'right' or self.selected_side_p2 == 'right'
+    # Badges
+    if self.game.selected_side == 'left':
+      self.draw_text_with_stroke_center("P1", (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 26), self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
+    elif self.game.selected_side == 'right':
+      self.draw_text_with_stroke_center("P1", (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 26), self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
 
-    self.draw_button_feedback(pvp_home_btn, pvp_home_btn.rect.collidepoint(mouse_pos) and not left_pressed, left_pressed)
-    self.draw_button_feedback(pvp_visitor_btn, pvp_visitor_btn.rect.collidepoint(mouse_pos) and not right_pressed, right_pressed)
+    if self.game.selected_mode == 'pvp':
+      if self.game.selected_side_p2 == 'left':
+        self.draw_text_with_stroke_center("P2", (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 26), self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
+      elif self.game.selected_side_p2 == 'right':
+        self.draw_text_with_stroke_center("P2", (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 26), self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
 
-    # P1 badge
-    if self.selected_side == 'left':
-      badge_pos = (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 16)
-      self.draw_text_with_stroke_center("P1", badge_pos, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-    elif self.selected_side == 'right':
-      badge_pos = (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 16)
-      self.draw_text_with_stroke_center("P1", badge_pos, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
+    # Show Continue button only when ready
+    ready = False
+    if self.game.selected_mode == 'pvp' and self.game.selected_side and self.game.selected_side_p2:
+      if self.game.selected_side != self.game.selected_side_p2:  # must be different
+        ready = True
+    elif self.game.selected_mode == 'pvai' and self.game.selected_side:
+      ready = True
 
-    # P2 badge - only show in PvP mode
-    if self.selected_mode == 'pvp':
-      if self.selected_side_p2 == 'left':
-        badge_pos2 = (pvp_home_btn.rect.centerx, pvp_home_btn.rect.top - 46)
-        self.draw_text_with_stroke_center("P2", badge_pos2, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
-      elif self.selected_side_p2 == 'right':
-        badge_pos2 = (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.top - 46)
-        self.draw_text_with_stroke_center("P2", badge_pos2, self.badge_font, (255,255,255), (0,0,0), stroke_width=3)
+    if ready:
+      cont_width = self.game.width // 5
+      cont_height = int(self.button_img.get_height() * (cont_width / self.button_img.get_width()))
+      cont_x = self.game.width // 2 - cont_width // 2
+      cont_y = self.game.height - cont_height - 60
+      cont_surface = pygame.transform.smoothscale(self.button_img, (cont_width, cont_height))
+      cont_button = Button(cont_x, cont_y, cont_surface, self.game)
+      if cont_button.draw():
+        self.option_completed = True
+      self.draw_text_with_stroke_center("CONTINUE", cont_button.rect.center, self.button_font, (255,255,255), (0,0,0), stroke_width=5)
+      
+    # --- Back Button ---
+    back_width = self.game.width // 7
+    back_height = int(self.button_img.get_height() * (back_width / self.button_img.get_width()))
+    back_img = pygame.transform.smoothscale(self.button_img, (back_width, back_height))
+    back_x = 40
+    back_y = self.game.height - back_height - 40
+    back_button = Button(back_x, back_y, back_img, self.game)
 
-    # Auto-continue when both players have selected sides (PvP mode)
-    if self.selected_mode == 'pvp' and (self.selected_side is not None) and (self.selected_side_p2 is not None):
-      self.option_completed = True
-      return
-    
-    # Auto-continue when P1 has selected side (PvAI mode)
-    if self.selected_mode == 'pvai' and (self.selected_side is not None):
-      self.option_completed = True
-      return
+    if back_button.draw():
+      # Reset and go back to mode selection
+      self.game.selected_mode = None
+      self.phase = 'mode'
+      self.option_completed = False
+      self.game.selected_side = None
+      self.game.selected_side_p2 = None
 
-    # Labels under each image button
-    label_offset = 12
-    self.draw_text_with_stroke_center("Squad Home Team", (pvp_home_btn.rect.centerx, pvp_home_btn.rect.bottom + label_offset + 10), self.button_font, (255,255,255), (0,0,0), stroke_width=4)
-    self.draw_text_with_stroke_center("Squad Visitor Team", (pvp_visitor_btn.rect.centerx, pvp_visitor_btn.rect.bottom + label_offset + 10), self.button_font, (255,255,255), (0,0,0), stroke_width=4)
+    # Label text on Back button
+    self.draw_text_with_stroke_center("BACK", back_button.rect.center, self.button_font, (255,255,255), (0,0,0), stroke_width=4)
 
-    # Xử lý khi người dùng nhấp vào nút
-    if act_home:
-      if self.selected_side is None:
-        self.selected_side = 'left'
-      elif self.selected_mode == 'pvp' and self.selected_side_p2 is None:
-        self.selected_side_p2 = 'left'
-      return
-
-    if act_visitor:
-      if self.selected_side is None:
-        self.selected_side = 'right'
-      elif self.selected_mode == 'pvp' and self.selected_side_p2 is None:
-        self.selected_side_p2 = 'right'
-      return
-  
   def draw(self):
     self.draw_background()
     if self.phase == 'mode':
       self.draw_phase_mode()
     elif self.phase == 'squad':
       self.draw_phase_squad()
-    
     pygame.display.flip()
-      
+
+  # -----------------------------
+  # Events & Reset
+  # -----------------------------
   def events(self):
     for event in pygame.event.get():
       if event.type == pygame.QUIT:
         self.game.running = False
-
       elif event.type == pygame.VIDEORESIZE:
         self.game.width, self.game.height = event.w, event.h
         self.game.screen = pygame.display.set_mode((self.game.width, self.game.height), pygame.RESIZABLE)
-
+        self.bg_scaled = pygame.transform.smoothscale(self.bg, (self.game.width, self.game.height))
+        self.scale_squads()
       elif event.type == pygame.KEYDOWN:
         if event.key == pygame.K_ESCAPE:
-          # Close only the option menu; keep game running unless explicitly quitting elsewhere
           if self.phase == 'squad':
-            # go back to mode selection
             self.phase = 'mode'
-            # Reset squad selection state
-            self.selected_side = None
-            self.selected_side_p2 = None
+            self.game.selected_side = None
+            self.game.selected_side_p2 = None
           else:
-            # Return to main menu
             self.option_completed = True
 
   def reset(self):
-    """Reset option menu state when returning from game"""
-    self.selected_mode = None
-    self.selected_squad = None
     self.phase = 'mode'
     self.option_completed = False
-    self.selected_side = None
-    self.selected_side_p2 = None
+    self.scale_squads()

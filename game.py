@@ -11,6 +11,11 @@ class Game:
     self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
     pygame.display.set_caption("Tiny football")
     self.clock = pygame.time.Clock()
+    
+    # selection state
+    self.selected_mode = None  # 'pvp' or 'pvai'
+    self.selected_side = None
+    self.selected_side_p2 = None
 
     # load background once
     try:

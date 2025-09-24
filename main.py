@@ -24,7 +24,7 @@ def main():
       option_menu.events()
       option_menu.draw()
       if option_menu.option_completed:
-        if option_menu.selected_mode:
+        if option_menu.game.selected_mode:
           game.playing = True
           state = "game"
         else:
@@ -35,6 +35,8 @@ def main():
     elif state == "game":
       game.events()
       game.draw()
+      print("Mode: ", game.selected_mode)
+      print("P1: ", game.selected_side)
       if not game.playing:
         state = "menu"
 
