@@ -44,6 +44,7 @@ class PvPGameplay:
     self.back_to_menu = False
 
     self._create_goals()
+    self._create_play_area()
     self.running = True
     self.playing = True
 
@@ -59,7 +60,6 @@ class PvPGameplay:
     except (pygame.error, FileNotFoundError):
       self.button_font = pygame.font.Font(None, 28)
 
-    # We'll lazy-create the Button object (so it uses current scaled size)
     self.back_button = None
 
   # -------- helpers --------
@@ -79,22 +79,36 @@ class PvPGameplay:
     img = pygame.transform.smoothscale(img, (int(img.get_width()*ratio), int(img.get_height()*ratio)))
     return img
 
+  def _create_play_area(self):
+    margin_x = self.width // 9.5
+    margin_y = self.height // 10
+    self.main_rect = pygame.Rect(margin_x, margin_y,
+                               self.width - 2*margin_x,
+                               self.height - 2*margin_y)
+    self.play_area = [self.main_rect, self.goal_left, self.goal_right]
+
   def _create_goals(self):
     goal_height = max(120, self.height // 5)
-    goal_thickness = max(32, self.width // 10)
+    goal_thickness = max(32, self.width // 9)
     self.goal_left = pygame.Rect(0, self.height//2 - goal_height//2, goal_thickness, goal_height)
     self.goal_right = pygame.Rect(self.width-goal_thickness, self.height//2 - goal_height//2, goal_thickness, goal_height)
 
   def reset_ball(self):
-    # always center the ball
     self.ball.x, self.ball.y = self.width // 2, self.height // 2
     self.ball.vx, self.ball.vy = 0.0, 0.0
-    # if your Ball class has last_touch, clear it
-    try:
-      self.ball.last_touch = None
-    except AttributeError:
-      pass
+    self.ball.last_touch = None
     self.ball.rect.center = (int(self.ball.x), int(self.ball.y))
+    
+  def reset_positions(self):
+    # reset ball to center
+    self.ball.x, self.ball.y = self.width // 2, self.height // 2
+    self.ball.vx, self.ball.vy = 0.0, 0.0
+    self.ball.last_touch = None
+    self.ball.rect.center = (int(self.ball.x), int(self.ball.y))
+
+    # reset players to starting positions
+    self.p1 = self.player1_img.get_rect(center=(200, self.height // 2))
+    self.p2 = self.player2_img.get_rect(center=(self.width - 200, self.height // 2))
 
   # ----- gameplay -----
   def handle_input(self):
@@ -112,20 +126,16 @@ class PvPGameplay:
     self.p2.clamp_ip(self.screen.get_rect())
 
   def update(self):
-    # while winner screen is up we don't update gameplay
     if self.winner is not None:
-      # nothing else here — click detection is done when drawing the button
       return
 
     self.handle_input()
-    self.ball.move()
+    self.ball.move(self.play_area, self.goal_left, self.goal_right)
 
-    # Ball kick calls should match your Ball signature (this code assumes ball.kick(rect, player_id))
     try:
       self.ball.kick(self.p1, 0)
       self.ball.kick(self.p2, 1)
     except TypeError:
-      # fallback if Ball.kick doesn't accept player id
       self.ball.kick(self.p1)
       self.ball.kick(self.p2)
 
@@ -142,24 +152,23 @@ class PvPGameplay:
       scorer = 0
 
     if scorer is not None:
-      own_goal = (hasattr(self.ball, "last_touch") and self.ball.last_touch == conceding_team)
+      own_goal = (self.ball.last_touch == conceding_team)
       self.score[scorer] += 1
       self.last_scorer = scorer
       self.last_goal_own = own_goal
       self.goal_text = "OWN GOAL!" if own_goal else "GOAL!"
       self.goal_text_timer = 120
       self.reset_ball()
+      self.reset_positions()
 
       if self.score[0] >= WIN_SCORE or self.score[1] >= WIN_SCORE:
         self.winner = 0 if self.score[0] >= WIN_SCORE else 1
         self.ball.vx = self.ball.vy = 0.0
-        # prepare button next draw
         self.back_button = None
         return
 
   # ----- drawing helpers -----
   def draw_text_with_stroke(self, surface, button, text, font, color, stroke_color, stroke_width=2):
-    # Draw stroked text centered on the button rect
     text_surf = font.render(text, True, color)
     text_rect = text_surf.get_rect(center=button.rect.center)
     for dx in range(-stroke_width, stroke_width + 1):
@@ -172,7 +181,6 @@ class PvPGameplay:
     surface.blit(text_surf, text_rect)
 
   def ensure_back_button(self):
-    """Create / recreate the back button scaled to current window."""
     if self.back_button is not None:
       return
     btn_w = self.width // 6
@@ -195,18 +203,18 @@ class PvPGameplay:
     return text_surface, text_rect
 
   def draw(self):
-    # background and players/ball
     self.screen.blit(self.scaled_bg, (0, 0))
 
-    # show goal rects (debug/visibility)
-    pygame.draw.rect(self.screen, (0, 0, 255), self.goal_left, 3)
-    pygame.draw.rect(self.screen, (255, 0, 0), self.goal_right, 3)
+    # debug goal + play area
+    pygame.draw.rect(self.screen, (255,255,0), self.main_rect, 3)
+    pygame.draw.rect(self.screen, (255,255,0), self.goal_left, 3)
+    pygame.draw.rect(self.screen, (255,255,0), self.goal_right, 3)
+
 
     self.screen.blit(self.player1_img, self.p1)
     self.screen.blit(self.player2_img, self.p2)
     self.ball.draw(self.screen)
 
-    # score colors depend on side choice
     p1_color = (0,0,255) if self.side_p1 == "left" else (255,0,0)
     p2_color = (0,0,255) if self.side_p2 == "left" else (255,0,0)
 
@@ -215,46 +223,34 @@ class PvPGameplay:
     self.screen.blit(p1_score_surf, p1_rect)
     self.screen.blit(p2_score_surf, p2_rect)
 
-    # temporary goal text
     if self.goal_text_timer > 0:
       txt, rect = self.draw_text(self.goal_text, 72, (255, 255, 0), self.width // 2, self.height // 2)
       self.screen.blit(txt, rect)
       self.goal_text_timer -= 1
 
-    # winner screen + back button
     if self.winner is not None:
       winner_txt, winner_rect = self.draw_text(f"P{self.winner + 1} WINS!", 84, (255, 215, 0), self.width // 2, self.height // 2 - 80)
       self.screen.blit(winner_txt, winner_rect)
-
-      # create scaled button if needed
       self.ensure_back_button()
-
-      # draw button and stroke text on it (like Menu.draw)
       if self.back_button:
         clicked = self.back_button.draw()
-        # label text on button (stroke)
         self.draw_text_with_stroke(self.screen, self.back_button, "BACK TO MENU", self.button_font, (255,255,255), (0,0,0), stroke_width=4)
         if clicked:
           self.back_to_menu = True
 
   def resize(self, width, height, screen):
-    """Call this on window resize to rescale assets."""
     self.width = width
     self.height = height
     self.screen = screen
     self.scaled_bg = pygame.transform.smoothscale(self.bg_img, (self.width, self.height))
     self._create_goals()
+    self._create_play_area()
 
-    # reload and rescale player images
     self.player1_img = self.load_player(self.side_p1, (0,0,255))
     self.player2_img = self.load_player(self.side_p2, (255,0,0))
-    # keep players in same center positions
     self.p1 = self.player1_img.get_rect(center=self.p1.center)
     self.p2 = self.player2_img.get_rect(center=self.p2.center)
 
-    # update ball bounds
     self.ball.width = width
     self.ball.height = height
-
-    # recreate back button with new sizes next draw
     self.back_button = None

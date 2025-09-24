@@ -7,63 +7,68 @@ class Ball:
   def __init__(self, width, height, player_size, x, y):
     self.width = width
     self.height = height
-    self.player_size = player_size
+    self.player_size = player_size    
+    self.last_collision_side = None
 
-    # bigger ball if you used the larger values earlier
     self.radius = 22
     self.speed = 6
     self.vx, self.vy = 0.0, 0.0
     self.x, self.y = float(x), float(y)
 
-    # who last touched the ball: None, 0 (p1), or 1 (p2)
     self.last_touch = None
 
-    # Load ball image (fallback circle)
     try:
       raw_img = pygame.image.load(os.path.join("assets", "ball.png")).convert_alpha()
     except (pygame.error, FileNotFoundError):
       raw_img = pygame.Surface((self.radius*2, self.radius*2), pygame.SRCALPHA)
       pygame.draw.circle(raw_img, (255, 255, 255), (self.radius, self.radius), self.radius)
 
-    # Scale to ball radius
     self.image = pygame.transform.smoothscale(raw_img, (self.radius*2, self.radius*2))
     self.rect = self.image.get_rect(center=(int(self.x), int(self.y)))
 
-  def move(self):
-    # integrate
+  def move(self, play_area, goal_left, goal_right):
+    self.last_collision_side = None
     self.x += self.vx
     self.y += self.vy
 
-    # Bounce on left/right walls (treat edges as solid walls)
-    if self.x - self.radius <= 0:
-      self.x = self.radius
-      self.vx *= -1
-    elif self.x + self.radius >= self.width:
-      self.x = self.width - self.radius
-      self.vx *= -1
+    main_rect = play_area[0]  # rect chính
 
-    # Bounce on top/bottom walls
-    if self.y - self.radius <= 0:
-      self.y = self.radius
+    # Top
+    if self.y - self.radius <= main_rect.top:
+      self.y = main_rect.top + self.radius
       self.vy *= -1
-    elif self.y + self.radius >= self.height:
-      self.y = self.height - self.radius
+      self.last_collision_side = "top"
+
+    # Bottom
+    elif self.y + self.radius >= main_rect.bottom:
+      self.y = main_rect.bottom - self.radius
       self.vy *= -1
+      self.last_collision_side = "bottom"
+
+    # Left edge (trừ phần goal)
+    if self.x - self.radius <= main_rect.left:
+      if not goal_left.colliderect(self.rect):
+        self.x = main_rect.left + self.radius
+        self.vx *= -1
+        self.last_collision_side = "left"
+
+    # Right edge (trừ phần goal)
+    elif self.x + self.radius >= main_rect.right:
+      if not goal_right.colliderect(self.rect):
+        self.x = main_rect.right - self.radius
+        self.vx *= -1
+        self.last_collision_side = "right"
 
     # friction
     self.vx *= FRICTION_FACTOR
     self.vy *= FRICTION_FACTOR
+    if abs(self.vx) < VELOCITY_THRESHOLD: self.vx = 0.0
+    if abs(self.vy) < VELOCITY_THRESHOLD: self.vy = 0.0
 
-    if abs(self.vx) < VELOCITY_THRESHOLD:
-      self.vx = 0.0
-    if abs(self.vy) < VELOCITY_THRESHOLD:
-      self.vy = 0.0
-
-    # update rect for drawing
     self.rect.center = (int(self.x), int(self.y))
 
+
   def collide_rect(self, rect):
-    # circle-rect collision test
     closest_x = max(rect.left, min(self.x, rect.right))
     closest_y = max(rect.top, min(self.y, rect.bottom))
     dx = self.x - closest_x
@@ -71,10 +76,6 @@ class Ball:
     return (dx * dx + dy * dy) < (self.radius * self.radius)
 
   def kick(self, player_rect, player_id):
-    """
-    player_id: 0 for P1, 1 for P2
-    If player is within kick range, set velocity away from player and record last_touch.
-    """
     px, py = player_rect.center
     dx = self.x - px
     dy = self.y - py
