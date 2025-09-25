@@ -31,7 +31,7 @@ class Ball:
     self.x += self.vx
     self.y += self.vy
 
-    main_rect = play_area[0]  # rect chính
+    main_rect = play_area[0]
 
     # Top
     if self.y - self.radius <= main_rect.top:
@@ -45,14 +45,14 @@ class Ball:
       self.vy *= -1
       self.last_collision_side = "bottom"
 
-    # Left edge (trừ phần goal)
+    # Left edge
     if self.x - self.radius <= main_rect.left:
       if not goal_left.colliderect(self.rect):
         self.x = main_rect.left + self.radius
         self.vx *= -1
         self.last_collision_side = "left"
 
-    # Right edge (trừ phần goal)
+    # Right edge
     elif self.x + self.radius >= main_rect.right:
       if not goal_right.colliderect(self.rect):
         self.x = main_rect.right - self.radius
@@ -85,6 +85,8 @@ class Ball:
       self.vx = (dx / dist) * self.speed
       self.vy = (dy / dist) * self.speed
       self.last_touch = player_id
+      return True
+    return False 
 
   def draw(self, screen):
     screen.blit(self.image, self.rect)
