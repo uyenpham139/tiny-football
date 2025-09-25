@@ -2,6 +2,7 @@ import pygame
 from menu import Menu
 from option_menu import OptionMenu
 from pvp import PvPGameplay
+from pvai import PvAIGameplay
 
 # -------------------
 # Config
@@ -26,6 +27,8 @@ def main():
   menu = Menu(screen, width, height)
   option_menu = OptionMenu(screen, width, height)
   pvp_gameplay = None
+  pvai_gameplay = None
+  current_gameplay = None
 
   while running:
     events = pygame.event.get()  # central event pump
@@ -52,7 +55,14 @@ def main():
           side_p1 = option_menu.selected_side
           side_p2 = option_menu.selected_side_p2
           playing = True
-          pvp_gameplay = PvPGameplay(screen, width, height, side_p1, side_p2)  # no bg_img needed
+          pvp_gameplay = PvPGameplay(screen, width, height, side_p1, side_p2)
+          current_gameplay = pvp_gameplay
+          state = "game"
+        elif option_menu.selected_mode == "pvai":
+          human_side = option_menu.selected_side
+          playing = True
+          pvai_gameplay = PvAIGameplay(screen, width, height, human_side, "medium")
+          current_gameplay = pvai_gameplay
           state = "game"
         else:
           state = "menu"
@@ -63,20 +73,22 @@ def main():
         if event.type == pygame.VIDEORESIZE:
           width, height = event.w, event.h
           screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
-          if pvp_gameplay:
-            pvp_gameplay.resize(width, height, screen)
+          if current_gameplay:
+            current_gameplay.resize(width, height, screen)
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
           playing = False
           state = "menu"
 
-      if pvp_gameplay:
-        pvp_gameplay.update()
-        pvp_gameplay.draw()
+      if current_gameplay:
+        current_gameplay.update()
+        current_gameplay.draw()
         
-        if pvp_gameplay and pvp_gameplay.back_to_menu:
+        if current_gameplay and current_gameplay.back_to_menu:
           playing = False
           state = "menu"
           pvp_gameplay = None
+          pvai_gameplay = None
+          current_gameplay = None
 
       if not playing:
         state = "menu"
