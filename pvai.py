@@ -116,42 +116,78 @@ class PvAIGameplay:
 
   def draw(self):
     self.screen.blit(self.scaled_bg, (0, 0))
-    
-    if self.show_bounds:
-        pygame.draw.rect(self.screen, (255,255,0), self.main_rect, 3)
-        pygame.draw.rect(self.screen, (255,255,0), self.goal_left, 3)
-        pygame.draw.rect(self.screen, (255,255,0), self.goal_right, 3)
 
+    if self.show_bounds:
+      pygame.draw.rect(self.screen, (255, 255, 0), self.main_rect, 3)
+      pygame.draw.rect(self.screen, (255, 255, 0), self.goal_left, 3)
+      pygame.draw.rect(self.screen, (255, 255, 0), self.goal_right, 3)
+
+    # Draw players
     self.screen.blit(self.human_img, self.human_rect)
     self.screen.blit(self.ai_img, self.ai_rect)
     self.ball.draw(self.screen)
-    p1_idx = 0 if self.human_side == "left" else 1
-    p2_idx = 1 if self.human_side == "left" else 0
-    p1_color = (0,0,255) if self.human_side == "left" else (255,0,0)
-    p2_color = (255,0,0) if self.human_side == "left" else (0,0,255)
-    p1_score_surf, p1_rect = self.draw_text(str(self.score[p1_idx]), 60, p1_color, self.width // 4, 50)
-    p2_score_surf, p2_rect = self.draw_text(str(self.score[p2_idx]), 60, p2_color, 3 * self.width // 4, 50)
-    self.screen.blit(p1_score_surf, p1_rect)
-    self.screen.blit(p2_score_surf, p2_rect)
+
+    # Decide scoreboard side based on human_side
+    if self.human_side == "left":
+      human_idx, ai_idx = 0, 1
+      human_color, ai_color = (0, 0, 255), (255, 0, 0)
+      human_x, ai_x = self.width // 4, 3 * self.width // 4
+    else:
+      human_idx, ai_idx = 1, 0
+      human_color, ai_color = (255, 0, 0), (0, 0, 255)
+      human_x, ai_x = 3 * self.width // 4, self.width // 4
+
+    # Draw human score
+    human_score_surf, human_rect = self.draw_text(
+      str(self.score[human_idx]), 60, human_color, human_x, 50
+    )
+    self.screen.blit(human_score_surf, human_rect)
+
+    # Draw AI score
+    ai_score_surf, ai_rect = self.draw_text(
+      str(self.score[ai_idx]), 60, ai_color, ai_x, 50
+    )
+    self.screen.blit(ai_score_surf, ai_rect)
+
+    # Goal text
     if self.goal_text_timer > 0 and not self.paused:
-      txt, rect = self.draw_text(self.goal_text, 72, (255, 255, 0), self.width // 2, self.height // 2)
+      txt, rect = self.draw_text(
+        self.goal_text, 72, (255, 255, 0), self.width // 2, self.height // 2
+      )
       self.screen.blit(txt, rect)
       self.goal_text_timer -= 1
-    if self.pause_button.draw() and not self.winner: self.paused = True
-    if self.sound_button.draw() and not self.winner: self.toggle_music()
+
+    # Pause & sound buttons
+    if self.pause_button.draw() and not self.winner:
+      self.paused = True
+    if self.sound_button.draw() and not self.winner:
+      self.toggle_music()
+
+    # Pause menu
     if self.paused:
       action = self.pause_menu.draw()
-      if action == 'resume': self.paused = False
-      elif action == 'quit': self.back_to_menu = True
+      if action == 'resume':
+        self.paused = False
+      elif action == 'quit':
+        self.back_to_menu = True
+
+    # Winner screen
     elif self.winner is not None:
-      winner_is_human = (self.winner == p1_idx)
+      winner_is_human = (self.winner == human_idx)
       winner_name = "HUMAN" if winner_is_human else "AI"
-      winner_txt, winner_rect = self.draw_text(f"{winner_name} WINS!", 84, (255, 215, 0), self.width // 2, self.height // 2 - 80)
+      winner_txt, winner_rect = self.draw_text(
+        f"{winner_name} WINS!", 84, (255, 215, 0), self.width // 2, self.height // 2 - 80
+      )
       self.screen.blit(winner_txt, winner_rect)
+
       self.ensure_back_button()
+      if self.back_button and self.back_button.draw():
+        self.back_to_menu = True
       if self.back_button:
-        if self.back_button.draw(): self.back_to_menu = True
-        self.draw_text_with_stroke(self.screen, self.back_button, "BACK TO MENU", self.button_font, (255,255,255), (0,0,0), stroke_width=4)
+        self.draw_text_with_stroke(
+          self.screen, self.back_button, "BACK TO MENU",
+          self.button_font, (255, 255, 255), (0, 0, 0), stroke_width=4
+        )
 
   def resize(self, width, height, screen):
     self.width, self.height, self.screen = width, height, screen
