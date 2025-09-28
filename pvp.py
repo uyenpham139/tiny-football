@@ -56,6 +56,13 @@ class PvPGameplay:
       self.button_font = pygame.font.Font(None, 28)
     self.back_button = None
 
+  # ------------------- FONT SCALING -------------------
+  def get_scaled_font_size(self, base_size):
+    """Scale font size relative to a 1200x800 base resolution."""
+    scale_factor = min(self.width / 1200, self.height / 800)
+    return max(16, int(base_size * scale_factor))
+  # ----------------------------------------------------
+
   def _load_ui_assets(self):
     try:
         self.pause_btn_img = pygame.transform.smoothscale(pygame.image.load(os.path.join("assets", "pause", "pause-button.png")).convert_alpha(), (50, 50))
@@ -117,29 +124,50 @@ class PvPGameplay:
     self.screen.blit(self.player1_img, self.p1)
     self.screen.blit(self.player2_img, self.p2)
     self.ball.draw(self.screen)
+
+    # Scores
+    score_size = self.get_scaled_font_size(60)
     p1_color = (0,0,255) if self.side_p1 == "left" else (255,0,0)
     p2_color = (0,0,255) if self.side_p2 == "left" else (255,0,0)
-    p1_score_surf, p1_rect = self.draw_text(str(self.score[0]), 60, p1_color, self.width // 4, 50)
-    p2_score_surf, p2_rect = self.draw_text(str(self.score[1]), 60, p2_color, 3 * self.width // 4, 50)
+    p1_score_surf, p1_rect = self.draw_text(str(self.score[0]), score_size, p1_color, self.width // 4, 50)
+    p2_score_surf, p2_rect = self.draw_text(str(self.score[1]), score_size, p2_color, 3 * self.width // 4, 50)
     self.screen.blit(p1_score_surf, p1_rect)
     self.screen.blit(p2_score_surf, p2_rect)
+
+    # Goal text
     if self.goal_text_timer > 0 and not self.paused:
-      txt, rect = self.draw_text(self.goal_text, 72, (255, 255, 0), self.width // 2, self.height // 2)
+      goal_size = self.get_scaled_font_size(72)
+      txt, rect = self.draw_text(self.goal_text, goal_size, (255, 255, 0), self.width // 2, self.height // 2)
       self.screen.blit(txt, rect)
       self.goal_text_timer -= 1
+
+    # Pause & Sound buttons
     if self.pause_button.draw() and not self.winner: self.paused = True
     if self.sound_button.draw() and not self.winner: self.toggle_music()
+
+    # Pause menu
     if self.paused:
       action = self.pause_menu.draw()
       if action == 'resume': self.paused = False
       elif action == 'quit': self.back_to_menu = True
+
+    # Winner screen
     elif self.winner is not None:
-      winner_txt, winner_rect = self.draw_text(f"P{self.winner + 1} WINS!", 84, (255, 215, 0), self.width // 2, self.height // 2 - 80)
+      winner_size = self.get_scaled_font_size(84)
+      winner_txt, winner_rect = self.draw_text(f"P{self.winner + 1} WINS!", winner_size, (255, 215, 0), self.width // 2, self.height // 2 - 80)
       self.screen.blit(winner_txt, winner_rect)
+
       self.ensure_back_button()
       if self.back_button:
         if self.back_button.draw(): self.back_to_menu = True
-        self.draw_text_with_stroke(self.screen, self.back_button, "BACK TO MENU", self.button_font, (255,255,255), (0,0,0), stroke_width=4)
+
+        btn_font_size = self.get_scaled_font_size(36)
+        try:
+          btn_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", btn_font_size)
+        except (pygame.error, FileNotFoundError):
+          btn_font = pygame.font.Font(None, btn_font_size)
+
+        self.draw_text_with_stroke(self.screen, self.back_button, "BACK TO MENU", btn_font, (255,255,255), (0,0,0), stroke_width=4)
         
   def resize(self, width, height, screen):
     self.width, self.height, self.screen = width, height, screen
@@ -154,6 +182,7 @@ class PvPGameplay:
     self.p2 = self.player2_img.get_rect(center=self.p2.center)
     self.ball.width, self.ball.height = width, height
     self.back_button = None
+
   def load_player(self, side, tint_color):
     if side == "left": path = os.path.join("assets", "Romanos FC (Home Team)", "2.png")
     else: path = os.path.join("assets", "Saint Bari (Visitor Team)", "2.png")
@@ -161,20 +190,24 @@ class PvPGameplay:
     except: img = pygame.Surface((80,80), pygame.SRCALPHA); img.fill(tint_color)
     target_w = max(80, self.width // 16); ratio = target_w / max(1, img.get_width())
     return pygame.transform.smoothscale(img, (int(img.get_width()*ratio), int(img.get_height()*ratio)))
+
   def _create_play_area(self):
     margin_x = self.width // 9.5; margin_y = self.height // 10
     self.main_rect = pygame.Rect(margin_x, margin_y, self.width - 2*margin_x, self.height - 2*margin_y)
     self.play_area = [self.main_rect, self.goal_left, self.goal_right]
+
   def _create_goals(self):
     goal_height = max(120, self.height // 5); goal_thickness = max(32, self.width // 9)
     self.goal_left = pygame.Rect(0, self.height//2 - goal_height//2, goal_thickness, goal_height)
     self.goal_right = pygame.Rect(self.width-goal_thickness, self.height//2 - goal_height//2, goal_thickness, goal_height)
+
   def reset_positions(self):
     self.ball.x, self.ball.y = self.width // 2, self.height // 2
     self.ball.vx, self.ball.vy = 0.0, 0.0; self.ball.last_touch = None
     self.ball.rect.center = (int(self.ball.x), int(self.ball.y))
     self.p1.center = (200, self.height // 2)
     self.p2.center = (self.width - 200, self.height // 2)
+
   def handle_input(self):
     keys = pygame.key.get_pressed(); speed = 6
     if keys[pygame.K_w]: self.p1.y -= speed
@@ -186,6 +219,7 @@ class PvPGameplay:
     if keys[pygame.K_LEFT]: self.p2.x -= speed
     if keys[pygame.K_RIGHT]: self.p2.x += speed
     self.p1.clamp_ip(self.screen.get_rect()); self.p2.clamp_ip(self.screen.get_rect())
+
   def draw_text_with_stroke(self, surface, button, text, font, color, stroke_color, stroke_width=2):
     text_surf = font.render(text, True, color); text_rect = text_surf.get_rect(center=button.rect.center)
     for dx in range(-stroke_width, stroke_width + 1):
@@ -195,12 +229,14 @@ class PvPGameplay:
         stroke_rect = stroke_surf.get_rect(center=(button.rect.centerx + dx, button.rect.centery + dy))
         surface.blit(stroke_surf, stroke_rect)
     surface.blit(text_surf, text_rect)
+
   def ensure_back_button(self):
     if self.back_button is not None: return
     btn_w = self.width // 6; src_w = max(self.button_img.get_width(), 1); src_h = max(self.button_img.get_height(), 1)
     btn_h = int(src_h * (btn_w / src_w)); scaled_btn = pygame.transform.smoothscale(self.button_img, (btn_w, btn_h))
     btn_x = self.width // 2 - btn_w // 2; btn_y = self.height // 2 + 40
     self.back_button = Button(btn_x, btn_y, scaled_btn, self.screen)
+
   def draw_text(self, text, size, color, x, y):
     try: font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", size)
     except (pygame.error, FileNotFoundError): font = pygame.font.Font(None, size)

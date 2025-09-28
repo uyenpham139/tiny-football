@@ -4,8 +4,8 @@ from option_menu import OptionMenu
 from pvp import PvPGameplay
 from pvai import PvAIGameplay
 
-WIDTH = 1600
-HEIGHT = 900
+WIDTH = 1200 
+HEIGHT = 675  
 
 def main():
   pygame.init()

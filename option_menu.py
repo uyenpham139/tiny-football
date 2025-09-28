@@ -42,15 +42,8 @@ class OptionMenu:
       self.visitor_img_raw = pygame.Surface((200, 200), pygame.SRCALPHA)
       self.visitor_img_raw.fill((160, 160, 160, 255))
 
-    # Load fonts
-    try:
-      self.button_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", 50)
-    except (pygame.error, FileNotFoundError):
-      self.button_font = pygame.font.Font(None, 35)
-    try:
-      self.badge_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", 28)
-    except (pygame.error, FileNotFoundError):
-      self.badge_font = pygame.font.Font(None, 22)
+    # Load fonts dynamically
+    self._load_fonts()
 
     # Pre-render static text surfaces
     self.text_cache = {}
@@ -63,6 +56,23 @@ class OptionMenu:
     self.scale_squads()
 
   # -----------------------------
+  # Font handling
+  # -----------------------------
+  def _load_fonts(self):
+    """Reload fonts based on window size."""
+    button_font_size = max(22, int(self.height * 0.06))  # ~6% of screen height
+    badge_font_size = max(14, int(self.height * 0.035))  # ~3.5% of screen height
+    try:
+      self.button_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", button_font_size)
+    except (pygame.error, FileNotFoundError):
+      self.button_font = pygame.font.Font(None, button_font_size)
+
+    try:
+      self.badge_font = pygame.font.Font("assets/fonts/LuckiestGuy-Regular.ttf", badge_font_size)
+    except (pygame.error, FileNotFoundError):
+      self.badge_font = pygame.font.Font(None, badge_font_size)
+
+  # -----------------------------
   # Utilities
   # -----------------------------
   def resize(self, width, height, screen):
@@ -72,6 +82,7 @@ class OptionMenu:
     self.screen = screen
     self.scaled_bg = pygame.transform.smoothscale(self.bg, (self.width, self.height))
     self.scale_squads()
+    self._load_fonts()   # reload fonts
 
   def cache_text(self, key, lines, stroke_color=(0,0,0), stroke_width=5):
     """Pre-render a multi-line text with stroke and cache it."""
